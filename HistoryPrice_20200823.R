@@ -6,7 +6,7 @@ library(XML)
 library(RCurl)
 library(RMySQL)
 
-## Create the Stock List and Category
+## Create the stock list and category (Table name: Stocks_Categories)
 Stock <- read_html('https://www.cmoney.tw/follow/channel/category-stock')
 StockCat <- html_nodes(Stock, 'section')
 
@@ -21,6 +21,7 @@ for( i in 1 : length(StockCat)){
   Category <- Category[-1,]
   StockList <- rbind(StockList, Category)
 }
+
 # get links of each category to find out the each stock item
 StockList$Link <- StockCat %>% html_nodes('a') %>% html_attr('href')
 StockList$Link <- paste('https://www.cmoney.tw',StockList$Link, sep ='')
@@ -42,7 +43,9 @@ Stocks$Id <- gsub('[()]','' ,Stocks$Id )
 write.csv(Stocks, 'Stocks_Categories.csv', row.names = F, fileEncoding = "utf8")
 
 
-# Historical Stocks Prices (via Yahoo Finance Api. Updated on every 11th.)
+## Historical Stocks Prices (via Yahoo Finance Api. Updated on every 11th.) (Table name: History_Prices)
+
+# Create a function to get the json file of historical prices of each stock from yahoo finance API and sort the data 
 HistoryStockPrice <- function(StartDate = 0, EndDate, StockId){
   url <- paste('https://query1.finance.yahoo.com/v8/finance/chart/',StockId,'.TW?period1=',StartDate,'&period2=', EndDate,'&interval=1d&events=history&=hP2rOschxO0', sep='')
   StockJSON <- fromJSON(url)
@@ -56,6 +59,7 @@ HistoryStockPrice <- function(StartDate = 0, EndDate, StockId){
   return(StocksPrices)
 }
 
+# Apply the function to each stock with the stock list which we created above 
 HistoryStockPrices <- NULL
 Now <- as.integer(Sys.time())
 
@@ -70,7 +74,9 @@ for (i in 1:nrow(Stocks)){
 saveRDS(HistoryStockPrices,'HistoryStockPrice_20200823.rds')
 
 
-# Download Monthly Revenue Report of Stocks from TWSE site (Updated on every 11th)
+## Download Monthly Revenue Report of Stocks from TWSE site (Updated on every 11th) (Table name: Monthly_Revenue)
+
+# Create a series of years and months
 month <-c()
 for (i in 102:109){
   for (j in 1:12){
@@ -79,17 +85,21 @@ for (i in 102:109){
   }
 }
 
+# Create a function to download the monthly revenue report
 download_monthly_revenue <- function(month){
   csv_url <- paste('https://mops.twse.com.tw/nas/t21/sii/t21sc03_', month , '.csv', sep = '')
   filepath <- paste('MonthlyRevenue/', month, '.csv', sep = '')
   download.file(csv_url, filepath)
 }
+
+# Download all historical monthly revenue reports
 sapply(month, download_monthly_revenue)
 filepath <- paste('MonthlyRevenue/', month, '.csv', sep = '')
 MonthlyRevenue <- do.call(rbind, lapply(filepath, read.csv))
 MonthlyRevenue <- MonthlyRevenue[,-1]
 
 
+# Read all csv files of all monthly revenue reports
 SplitDate <- do.call(rbind,strsplit(MonthlyRevenue$資料年月, split = '/'))
 MonthlyRevenue$資料年月 <- as.character(paste0((as.numeric(SplitDate[,1])+1911), 
                                            ifelse(as.numeric(SplitDate[,2]) < 10 ,paste0('0',SplitDate[,2], sep =''), SplitDate[,2]), sep = ''))
@@ -98,14 +108,18 @@ colnames(MonthlyRevenue) <- c('Date', 'Id', 'Name', 'Industry', 'Monthly_Revenue
 
 
 
-# Daily Stock prices and Indexes from TWSE (Daily updated)
+## Daily indexes close from TWSE site (Daily updated) (Table name: History_Index_TWSE)
 
+# List out all the categories of Indexes
 Index_Category <- c('價格指數(臺灣證券交易所)', '價格指數(跨市場)', '價格指數(臺灣指數公司)',
                     '報酬指數(臺灣證券交易所)', '報酬指數(跨市場)', '報酬指數(臺灣指數公司)')
+
+# Extract the tables from the TWSE site
 url <- 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&type=ALLBUT0999'
 Today_Prices <- read_html(url)
 Today_Prices_table <- html_table(Today_Prices)
 Today_Index <- NULL
+
 for (i in 1:6){
   Index_Table <- as.data.frame(Today_Prices_table[i])
   colnames(Index_Table) <- c('Index', 'Close', 'Direction', 'Diff', 'Diff(%)', 'Note')
@@ -115,6 +129,7 @@ for (i in 1:6){
   Today_Index <- rbind(Today_Index, Index_Table)
 }
 
+## Daily stock prices from TWSE site (Daily updated) (Table name: History_Prices_TWSE)
 
 Today_Prices_TWSE <- as.data.frame(Today_Prices_table[9])
 Today_Prices_TWSE <- Today_Prices_TWSE[-(1:2),]
@@ -123,7 +138,9 @@ colnames(Today_Prices_TWSE) <- c('Id', 'Name', 'Volume', 'Deals', 'Amounts', 'Op
 Today_Prices_TWSE$Date <- Sys.Date()
 
 
-# Daily Institutional Investors' Trading of Each Stock (Daily updated)
+# Daily institutional investors' Trading of Each Stock (Daily updated) (Table name: Institutional_Investor_Trading_TWSE)
+
+# Create the function to download the institutional investors' Trading records
 Daily_Institutional_Investor_Trading <- function(date){
   csv_url <- paste('http://www.tse.com.tw/fund/T86?response=csv&date=', date , '&selectType=ALLBUT0999', sep = '')
   filepath <- paste('Daily_Institutional_Investor_Trading/', date, '.csv', sep = '')
@@ -145,7 +162,7 @@ Daily_Institutional_Investor_Trading <- function(date){
 Today_Institutional_Investor_Trading <- Daily_Institutional_Investor_Trading(20200821)
 
 
-# Write data into MYSQL 
+## Write all data into MySQL 
 StocksDB <- dbConnect(MySQL(), dbname = "Stocks(TW)", username="root", password="") # 建立資料庫連線
 
 dbListTables(StocksDB)
