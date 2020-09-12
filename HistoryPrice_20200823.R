@@ -53,7 +53,7 @@ HistoryStockPrice <- function(StartDate = 0, EndDate, StockId){
   StocksPrice <- matrix(unlist(StockJSON[["chart"]][["result"]][["indicators"]][["quote"]]), nrow(StocksDate))
   StocksAdjClose <- data.frame(unlist(StockJSON[["chart"]][["result"]][["indicators"]][["adjclose"]]))
   StocksPrices <- cbind(StocksDate, StocksPrice, StocksAdjClose)
-  colnames(StocksPrices) <- c('Date', 'Volume', 'Close', 'Open', 'High', 'Low', 'AdjClose')
+  colnames(StocksPrices) <- c('Date', 'Open', 'Close', 'High', 'Volume', 'Low', 'AdjClose')
   StocksPrices$Id <- StockId
   rownames(StocksPrices) <- NULL
   return(StocksPrices)
